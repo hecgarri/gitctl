@@ -1,6 +1,24 @@
 # shellcheck shell=bash
 # gitctl clean [--dry-run]
 
+# Rellena cand_paths y cand_branches (del llamador) con los worktrees gestionados,
+# limpios y ya integrados en su base.
+_clean_candidates() {
+	local i path branch
+	cand_paths=() cand_branches=()
+	wt_list
+	for i in "${!WT_PATHS[@]}"; do
+		((i == 0)) && continue
+		path="${WT_PATHS[$i]}" branch="${WT_BRANCHES[$i]}"
+		[[ -d "$path" && -n "$branch" ]] || continue
+		wt_is_managed "$branch" || continue
+		git_is_clean "$path" || continue
+		branch_merged_into "$branch" "$(wt_base_of "$branch")" || continue
+		cand_paths+=("$path")
+		cand_branches+=("$branch")
+	done
+}
+
 cmd_clean() {
 	local dry=""
 	while (($#)); do
@@ -27,19 +45,9 @@ H
 	local prune
 	prune="$(git worktree prune --dry-run -v 2>&1 || true)"
 
-	wt_list
-	local i path branch
+	local i
 	local -a cand_paths=() cand_branches=()
-	for i in "${!WT_PATHS[@]}"; do
-		((i == 0)) && continue
-		path="${WT_PATHS[$i]}" branch="${WT_BRANCHES[$i]}"
-		[[ -d "$path" && -n "$branch" ]] || continue
-		wt_is_managed "$branch" || continue
-		git_is_clean "$path" || continue
-		branch_merged_into "$branch" "$(wt_base_of "$branch")" || continue
-		cand_paths+=("$path")
-		cand_branches+=("$branch")
-	done
+	_clean_candidates
 
 	if [[ -z "$prune" && ${#cand_paths[@]} -eq 0 ]]; then
 		ok "nada que limpiar"

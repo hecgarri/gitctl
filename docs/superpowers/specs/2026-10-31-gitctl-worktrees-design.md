@@ -112,7 +112,7 @@ setup = npm ci         # comando al crear, ejecutado en el worktree
 ## Decisiones que he tomado yo (revísalas)
 
 - Nombres de comandos: `new`, `cd`, `ls`, `merge`, `rm`, `clean`, `shell-init`, más `init`/`doctor`.
-- Sin argumentos, `gitctl` ejecuta `ls`. El menú fzf desaparece.
+- ~~Sin argumentos, `gitctl` ejecuta `ls`.~~ Sustituido por el modo interactivo (ver el añadido al final).
 - `merge` exige que el worktree principal esté en la rama destino; no la cambia por su cuenta.
 - El mensaje del merge commit es el que git pone por defecto.
 - `-y/--yes` se mantiene para responder «sí» a las confirmaciones.
@@ -153,3 +153,18 @@ setup = npm ci         # comando al crear, ejecutado en el worktree
 - Prueba manual: `eval "$(gitctl shell-init bash)"`, `gitctl new prueba`, un commit,
   `gitctl merge`, y comprobar el merge commit en main, el worktree y la rama borrados
   y la terminal de vuelta en el principal.
+
+## Añadido (2026-11-01): modo interactivo
+
+Héctor usaba un script de PowerShell que le **hacía preguntas en secuencia**; los
+comandos sueltos no bastaban. `gitctl` sin argumentos (con terminal) ahora:
+
+- **en el principal**: ofrece limpiar los worktrees gestionados ya integrados, muestra
+  los existentes, pide un nombre (vacío = salir; existente = saltar a él; nuevo = pide la
+  base, salvo si la rama ya existe) y crea el worktree con `new`;
+- **en un worktree**: muestra delante/detrás de la base; si hay cambios sin commitear, lo
+  dice y sale; si no, pregunta «¿Integrarlo?» (→ `merge`, con su pregunta de conflictos y
+  de eliminación) y, si no, «¿Volver al principal?».
+
+Sin terminal sigue siendo `ls`. `gitctl i` lo fuerza. `GITCTL_ASSUME_TTY=1` permite
+probarlo con entrada redirigida.

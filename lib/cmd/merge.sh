@@ -78,7 +78,7 @@ _merge_continue() {
 
 # Pregunta qué hacer ante un conflicto. Imprime abort|keep.
 _merge_ask() {
-	if [[ ! -t 0 ]]; then
+	if ! is_interactive; then
 		warn "sin terminal interactiva: se aborta el merge (usa --on-conflict=keep para dejarlo en curso)" >&2
 		echo abort
 		return

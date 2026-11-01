@@ -42,11 +42,16 @@ wt_list() {
 
 # Nombre, rama o ruta → ruta del worktree. Vacío = worktree principal.
 wt_resolve() {
-	local arg="${1:-}" i abs=""
-	if [[ -z "$arg" ]]; then
+	if [[ -z "${1:-}" ]]; then
 		git_main_root
 		return
 	fi
+	wt_find "$1" || die "no existe el worktree «$1» (ver gitctl ls)"
+}
+
+# Como wt_resolve, pero devuelve 1 (sin morir) si no hay coincidencia.
+wt_find() {
+	local arg="$1" i abs=""
 	wt_list
 	for i in "${!WT_PATHS[@]}"; do
 		[[ "${WT_BRANCHES[$i]}" == "$arg" ]] && {
@@ -70,7 +75,16 @@ wt_resolve() {
 			}
 		done
 	fi
-	die "no existe el worktree «$arg» (ver gitctl ls)"
+	return 1
+}
+
+# «delante/detrás» de una rama respecto a su base (p. ej. «3/0»), o «?».
+wt_ahead_behind() {
+	git_branch_exists "$2" || {
+		printf '?'
+		return
+	}
+	git rev-list --left-right --count "refs/heads/$1...refs/heads/$2" 2>/dev/null | awk '{printf "%s/%s", $1, $2}'
 }
 
 # Raíz del worktree en el que estás.

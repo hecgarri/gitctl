@@ -10,10 +10,20 @@ require_cmd() {
 	done
 }
 
+# ¿Se puede preguntar al usuario? (GITCTL_ASSUME_TTY=1 lo fuerza, para los tests)
+is_interactive() { [[ -n "${GITCTL_ASSUME_TTY:-}" || -t 0 ]]; }
+
+# ask "pregunta" [defecto] → imprime la respuesta (o el defecto si se deja vacía).
+ask() {
+	local ans=""
+	read -r -p "$1${2:+ [$2]}: " ans || true
+	printf '%s' "${ans:-${2:-}}"
+}
+
 # confirm "pregunta" → 0 si el usuario acepta. Sin TTY y sin --yes: rechaza.
 confirm() {
 	[[ -n "$GITCTL_YES" ]] && return 0
-	if [[ ! -t 0 ]]; then
+	if ! is_interactive; then
 		err "se necesita confirmación ($1); usa --yes en modo no interactivo"
 		return 1
 	fi

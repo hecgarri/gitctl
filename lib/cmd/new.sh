@@ -106,7 +106,7 @@ cmd_new() {
 	cmd="$(cfg setup)"
 	if [[ -n "$cmd" ]]; then
 		info "setup: $cmd"
-		if ! (cd "$path" && bash -c "$cmd"); then
+		if ! (cd "$path" && bash -c "$cmd" </dev/null); then
 			warn "el setup ha fallado; el worktree se conserva en $path"
 			rc=1
 		fi

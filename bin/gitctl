@@ -18,8 +18,9 @@ usage() {
 gitctl — gestor de Git worktrees
 
 Uso: gitctl [opciones] <comando> [argumentos]
-     gitctl                     (sin argumentos: gitctl ls)
+     gitctl                     (sin argumentos: modo interactivo; sin terminal, gitctl ls)
 
+  i                          Modo interactivo: te pregunta qué hacer según dónde estés
   new <rama> [--base RAMA]   Crea rama + worktree, lo prepara y te deja dentro
   cd [<rama>]                Salta a un worktree (sin argumento, al principal)
   ls                         Lista los worktrees y su estado
@@ -60,10 +61,13 @@ main() {
 		shift
 	done
 
-	(($#)) || set -- ls
+	if (($# == 0)); then
+		if is_interactive; then set -- i; else set -- ls; fi
+	fi
 	local cmd="$1"
 	shift
 	case "$cmd" in
+	i | interactive) cmd_interactive "$@" ;;
 	new) cmd_new "$@" ;;
 	cd) cmd_cd "$@" ;;
 	ls | list) cmd_ls "$@" ;;

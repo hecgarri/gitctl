@@ -49,11 +49,7 @@ H
 		base="-" ab="-"
 		if ((i > 0)) && [[ -n "$branch" ]]; then
 			base="$(wt_base_of "$branch")"
-			if git_branch_exists "$base"; then
-				ab="$(git rev-list --left-right --count "refs/heads/$branch...refs/heads/$base" 2>/dev/null | awk '{print $1"/"$2}')"
-			else
-				ab="?"
-			fi
+			ab="$(wt_ahead_behind "$branch" "$base")"
 		fi
 		if [[ ! -d "$path" ]]; then
 			changes="ausente"

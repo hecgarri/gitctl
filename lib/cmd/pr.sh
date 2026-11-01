@@ -113,7 +113,10 @@ cmd_pr() {
 		fi
 		title="${title:-$default}"
 	fi
-	body="$(printf 'Commits:\n\n'; git log --reverse --format='- %s' "refs/heads/$base..refs/heads/$branch")"
+	body="$(
+		printf 'Commits:\n\n'
+		git log --reverse --format='- %s' "refs/heads/$base..refs/heads/$branch"
+	)"
 
 	{
 		echo "Se subirá la rama $branch a $remote y se abrirá una PR hacia $base:"

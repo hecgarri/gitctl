@@ -119,10 +119,19 @@ GH
 	[[ ! -f "$REPO/f.txt" ]]
 }
 
-@test "menú: Integrar con merge local sigue funcionando con remoto" {
-	run bash -c 'printf "4\n1\n2\ns\n\n0\n" | GITCTL_ASSUME_TTY=1 GITCTL_SHELL=1 GITCTL_CD_FILE="$1" gitctl' _ "$CD_FILE"
+@test "menú: Integrar con merge local sigue funcionando con remoto y ofrece subir la base" {
+	run bash -c 'printf "4\n1\n2\ns\ns\n\n0\n" | GITCTL_ASSUME_TTY=1 GITCTL_SHELL=1 GITCTL_CD_FILE="$1" gitctl' _ "$CD_FILE"
 	assert_success
+	assert_output_contains "Se subirá main a origin"
 	[[ -f "$REPO/f.txt" ]]
 	[[ ! -d "$(wt_path feat-a)" ]]
+	[[ "$(git ls-remote --heads origin main | cut -f1)" == "$(git rev-parse main)" ]]
 	refute grep -q "pr create" "$GH_LOG"
+}
+
+@test "menú: merge local sin subir la base lo deja solo en local" {
+	run bash -c 'printf "4\n1\n2\nn\ns\n\n0\n" | GITCTL_ASSUME_TTY=1 GITCTL_SHELL=1 GITCTL_CD_FILE="$1" gitctl' _ "$CD_FILE"
+	assert_output_contains "no se ha subido main"
+	[[ -f "$REPO/f.txt" ]]
+	[[ "$(git ls-remote --heads origin main | cut -f1)" != "$(git rev-parse main)" ]]
 }

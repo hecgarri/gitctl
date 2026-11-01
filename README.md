@@ -75,6 +75,7 @@ git commit -am "…"             # trabajas dentro del worktree
 gitctl ls                      # estado de todos los worktrees
 gitctl cd                      # vuelves al principal;  gitctl cd feat/login  para volver
 gitctl merge feat/login        # integra (desde el worktree basta con «gitctl merge»)
+gitctl merge feat/login --push # integra y además sube la base (main) al remoto
 ```
 
 `merge` necesita que el worktree y el principal no tengan cambios sin commitear y
@@ -87,6 +88,13 @@ que el principal esté en la rama base. Si hay **conflictos**, te pregunta:
 
 Sin terminal interactiva aborta; `--on-conflict=abort|keep` decide por ti.
 
+El merge es **local**: la base no se sube sola. Con `--push`, después de integrar
+sube la base al remoto (`origin`, o el de `remote`), mostrando antes los commits
+y pidiendo confirmación (o `-y`). Sin `--push`, avisa si la base quedó por
+delante del remoto. Si el push falla, el merge local se conserva; repetir
+`gitctl merge --push` con la rama ya integrada solo sube lo pendiente. En el menú,
+el merge local pregunta si subir la base cuando hay remoto.
+
 ## Comandos
 
 | Comando | Qué hace |
@@ -96,8 +104,8 @@ Sin terminal interactiva aborta; `--on-conflict=abort|keep` decide por ti.
 | `cd [<rama>]` | Salta a un worktree; sin argumento, al principal |
 | `ls` | Worktrees con rama, base, commits por delante/detrás y cambios |
 | `diff [<rama>] [--stat\|--files\|--log\|--behind\|--wip] [-- <archivo>…]` | Compara un worktree con su base desde el ancestro común: lo que aportaría el merge |
-| `merge [<rama>]` | Merge commit en la base, en el principal; luego ofrece borrar worktree y rama |
-| `merge --continue` | Termina un merge que dejaste con conflictos |
+| `merge [<rama>] [--push]` | Merge commit en la base, en el principal; con `--push` sube la base al remoto; luego ofrece borrar worktree y rama |
+| `merge --continue [--push]` | Termina un merge que dejaste con conflictos |
 | `pr [<rama>] [--title T]` | Sube la rama y abre una pull request hacia su base con `gh`; si ya hay una abierta, solo sube los commits nuevos |
 | `rm <rama> [--force]` | Borra worktree y rama; sin `--force` se niega si hay algo sin commitear o sin integrar |
 | `clean [--dry-run]` | Borra los worktrees creados por gitctl ya integrados y olvida los que no existen |

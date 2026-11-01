@@ -341,8 +341,10 @@ _menu_merge() {
 		fi
 	fi
 
-	local rc=0
-	_menu_exec merge "$path" || rc=$?
+	# Con remoto, merge pregunta después si subir la base (--push confirma).
+	local rc=0 push=()
+	git remote get-url "$(pr_remote)" >/dev/null 2>&1 && push=(--push)
+	_menu_exec merge "$path" "${push[@]}" || rc=$?
 	[[ -n "$from" ]] && info "el principal queda en $base (antes estaba en $from: git switch $from para volver)"
 	_menu_stash_note "$stashed" "$cur"
 	return "$rc"

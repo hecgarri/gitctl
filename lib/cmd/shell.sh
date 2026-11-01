@@ -38,10 +38,10 @@ F
 _gitctl_complete() {
 	local cur="${COMP_WORDS[COMP_CWORD]}" words
 	if [ "$COMP_CWORD" -eq 1 ]; then
-		words="new cd ls merge rm clean init doctor shell-init help"
+		words="new cd ls diff merge rm clean init doctor shell-init help"
 	else
 		case "${COMP_WORDS[1]}" in
-		cd | merge | rm) words="$(command git worktree list --porcelain 2>/dev/null | sed -n 's|^branch refs/heads/||p')" ;;
+		cd | diff | merge | rm) words="$(command git worktree list --porcelain 2>/dev/null | sed -n 's|^branch refs/heads/||p')" ;;
 		*) words="" ;;
 		esac
 	fi

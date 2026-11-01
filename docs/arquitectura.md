@@ -9,7 +9,9 @@ lib/core/util.sh     confirm, need_arg, want_help, require_cmd
 lib/core/git.sh      consultas a git (raíz del principal, rama por defecto…)
 lib/core/config.sh   lector de .gitctl.conf («clave = valor», sin ejecutar)
 lib/core/wt.sh       worktrees: ubicación, listado, resolución, base, borrado y cd
-lib/cmd/*.sh         un archivo por comando (new, nav, merge, rm, clean, shell, setup)
+lib/core/picker.sh   selector del menú: lista numerada, o fzf si está instalado
+lib/cmd/*.sh         un archivo por comando (new, nav, diff, merge, rm, clean, shell, setup)
+lib/cmd/interactive.sh  el menú (gitctl a secas)
 tests/*.bats         tests con bats sobre repos temporales
 ```
 
@@ -46,6 +48,21 @@ shell-init` imprime una función `gitctl` que:
 
 Se usa un archivo y no stdout para que `setup` pueda imprimir lo que quiera y las
 confirmaciones sigan siendo interactivas.
+
+## Menú interactivo
+
+`gitctl` sin argumentos (con terminal) abre un bucle de menú. Cada acción se
+ejecuta como **proceso hijo** (`bin/gitctl <comando>`), igual que en gcpctl: un
+`die` dentro de un comando muestra su error y vuelve al menú en vez de cerrarlo,
+y menú y comandos sueltos comparten el mismo código.
+
+Cada hijo recibe su propio `GITCTL_CD_FILE`; el menú guarda la carpeta pedida y
+la escribe en el `GITCTL_CD_FILE` real al salir. «Nuevo» y «Entrar» salen del
+menú en el acto. Si la carpeta actual desaparece (se integró y borró el worktree
+en el que estabas), el menú sigue desde el principal.
+
+Antes de `merge`, el menú repite sus comprobaciones y ofrece arreglar cada una
+(entrar a commitear, `git stash -u` en el principal, `git switch <base>`).
 
 ## Integración (`merge`)
 

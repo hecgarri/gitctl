@@ -6,11 +6,11 @@
 # dentro de un comando muestra su error y vuelve al menú en vez de cerrarlo, y
 # el menú comparte exactamente el mismo código que los comandos sueltos.
 
-MENU_MAIN=""   # Worktree principal.
-MENU_CD=""     # Carpeta a la que llevar al usuario al salir.
-MENU_EXIT=0    # 1 = salir del menú tras la acción en curso.
-MENU_REQ=""    # Carpeta que pidió el último proceso hijo (cd_to).
-MENU_ITEMS=()  # Elementos «ruta<TAB>etiqueta» de la última lista de worktrees.
+MENU_MAIN=""  # Worktree principal.
+MENU_CD=""    # Carpeta a la que llevar al usuario al salir.
+MENU_EXIT=0   # 1 = salir del menú tras la acción en curso.
+MENU_REQ=""   # Carpeta que pidió el último proceso hijo (cd_to).
+MENU_ITEMS=() # Elementos «ruta<TAB>etiqueta» de la última lista de worktrees.
 
 _i_help() {
 	cat <<'H'
@@ -401,6 +401,7 @@ _menu_offer_shell() {
 		echo "  eval \"\$(gitctl shell-init $sh)\""
 	} >&2
 	if confirm "¿La añado ahora?"; then
+		# shellcheck disable=SC2016 # la línea del rc lleva $(...) literal, a propósito
 		printf '\n# gitctl: cambiar de carpeta a los worktrees\neval "$(gitctl shell-init %s)"\n' "$sh" >>"$rc_file"
 		ok "añadida a $rc_file"
 		info "para activarla en esta terminal: sal del menú (0) y ejecuta «source $rc_file»"

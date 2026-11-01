@@ -1,0 +1,3 @@
+# jq usa $variables dentro de comillas simples a propósito.
+disable=SC2016
+external-sources=true

@@ -13,35 +13,30 @@ setup_repo() {
 	export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$HOME/.gitconfig"
 	export NO_COLOR=1
 	export PATH="$GITCTL_ROOT/bin:$PATH"
-	unset GITCTL_RUN_ID GITCTL_YES
+	unset GITCTL_YES GITCTL_CD_FILE GITCTL_SHELL
 	REPO="$TEST_TMP/repo"
 	mkdir -p "$REPO"
 	cd "$REPO" || return 1
 	git init -q -b main
 	echo "hola" >README.md
-	git add README.md
-	git commit -q -m "inicial"
-	gitctl init >/dev/null 2>&1
-	# El .gitctl.conf de ejemplo se sustituye por uno mínimo en cada test.
+	printf '.env\nconfig/local.yml\n' >.gitignore
 	: >.gitctl.conf
-	git add .gitctl.conf
-	git commit -q -m "config"
+	git add README.md .gitignore .gitctl.conf
+	git commit -q -m "inicial"
+	export CD_FILE="$TEST_TMP/cd-file"
+	: >"$CD_FILE"
 }
 
-add_check() { echo "check.$1 = $2" >>"$REPO/.gitctl.conf"; }
 set_cfg() { echo "$1 = $2" >>"$REPO/.gitctl.conf"; }
+wt_path() { echo "$TEST_TMP/repo.wt/$1"; }
 
-state() { echo "$REPO/.git/gitctl"; }
-wt_of() { echo "$TEST_TMP/repo.wt/$1-$2"; }
-
-# Crea la tarea t1 con los agentes indicados y ejecuta un run de cada uno.
-task_with_runs() {
-	gitctl task new "Tarea de prueba" >/dev/null 2>&1
-	gitctl task assign t1 "$@" >/dev/null 2>&1
-	gitctl run t1 --wait >/dev/null 2>&1
+# Commit de un archivo en un directorio: commit_in <dir> <archivo> <contenido>
+commit_in() {
+	echo "$3" >"$1/$2"
+	git -C "$1" add "$2"
+	git -C "$1" commit -q -m "cambio $2"
 }
 
-# Imprime la salida de run (útil al depurar con bats --print-output-on-failure).
 assert_success() {
 	if [[ "$status" -ne 0 ]]; then
 		echo "estado $status, salida:"
@@ -60,6 +55,14 @@ assert_output_contains() {
 	if [[ "$output" != *"$1"* ]]; then
 		echo "la salida no contiene «$1»:"
 		echo "$output"
+		return 1
+	fi
+}
+
+# Falla si el comando tiene éxito («! cmd» no hace fallar un test de bats).
+refute() {
+	if "$@"; then
+		echo "no debía cumplirse: $*"
 		return 1
 	fi
 }

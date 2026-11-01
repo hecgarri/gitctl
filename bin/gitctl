@@ -1,59 +1,43 @@
 #!/usr/bin/env bash
-# gitctl — coordinación de desarrollo multiagente con Git worktrees.
-# Punto de entrada: carga el núcleo y despacha subcomandos.
+# gitctl — gestor de Git worktrees: crear, saltar, integrar y limpiar.
 set -euo pipefail
 
-GITCTL_VERSION="0.1.0"
+GITCTL_VERSION="0.2.0"
 _self="$(readlink -f "${BASH_SOURCE[0]}")"
 GITCTL_HOME="$(cd "$(dirname "$_self")/.." && pwd)"
-GITCTL_BIN="$GITCTL_HOME/bin/gitctl"
 GITCTL_LIB="$GITCTL_HOME/lib"
-export GITCTL_HOME GITCTL_BIN
 
 for _f in "$GITCTL_LIB"/core/*.sh "$GITCTL_LIB"/cmd/*.sh; do
 	# shellcheck source=/dev/null
 	source "$_f"
 done
 unset _f _self
-adapters_load
 
 usage() {
-	cat <<'EOF'
-gitctl — desarrollo paralelo con agentes de IA aislados en Git worktrees
+	cat <<'H'
+gitctl — gestor de Git worktrees
 
 Uso: gitctl [opciones] <comando> [argumentos]
-     gitctl                  (sin argumentos: menú interactivo)
+     gitctl                     (sin argumentos: gitctl ls)
 
-Configuración
-  init                       Prepara el repositorio (estado + .gitctl.conf de ejemplo)
-  doctor                     Comprueba dependencias y agentes disponibles
-
-Worktrees
-  wt ls|new|show|path|open|rm
-
-Tareas y agentes
-  task new|ls|show|assign|close
-  agents                     Lista los adaptadores de agentes disponibles
-  run <tarea> [agente...]    Lanza agentes en modo headless (en paralelo)
-  run status|wait|logs|stop  Gestiona ejecuciones
-  fix <tarea> <agente>       Relanza al autor con los hallazgos de revisión/verificación
-
-Calidad e integración
-  verify <tarea> <agente>    Ejecuta los checks en el commit exacto (evidencia)
-  review <tarea> <autor> --by <revisor>
-                             Revisión cruzada de solo lectura (afirmación)
-  approve <tarea> <agente>   Aprobación humana ligada al commit
-  gate <tarea> <agente>      Comprueba si el commit puede integrarse
-  pr open|status|merge       Pull Requests con GitHub (gh)
-  log [tarea]                Historial de eventos
+  new <rama> [--base RAMA]   Crea rama + worktree, lo prepara y te deja dentro
+  cd [<rama>]                Salta a un worktree (sin argumento, al principal)
+  ls                         Lista los worktrees y su estado
+  merge [<rama>]             Integra el worktree en su base (merge commit) y lo limpia
+  merge --continue           Termina un merge que dejaste con conflictos
+  rm <rama> [--force]        Elimina un worktree y su rama
+  clean [--dry-run]          Elimina los worktrees ya integrados
+  shell-init bash|zsh        Función de shell para el cd automático
+  init                       Crea un .gitctl.conf de ejemplo
+  doctor                     Comprueba git, repositorio, config y shell
 
 Opciones globales
   -q, --quiet     Menos mensajes          -v, --verbose   Más mensajes
-  -y, --yes       Responde «sí» a las confirmaciones (no aplica a approve)
+  -y, --yes       Responde «sí» a las confirmaciones
   -h, --help      Ayuda                   --version       Versión
 
 Ejecuta «gitctl <comando> --help» para la ayuda de cada comando.
-EOF
+H
 }
 
 main() {
@@ -76,33 +60,21 @@ main() {
 		shift
 	done
 
-	if (($# == 0)); then
-		cmd_ui
-		return
-	fi
-
+	(($#)) || set -- ls
 	local cmd="$1"
 	shift
 	case "$cmd" in
+	new) cmd_new "$@" ;;
+	cd) cmd_cd "$@" ;;
+	ls | list) cmd_ls "$@" ;;
+	merge) cmd_merge "$@" ;;
+	rm | remove) cmd_rm "$@" ;;
+	clean) cmd_clean "$@" ;;
+	shell-init) cmd_shell_init "$@" ;;
 	init) cmd_init "$@" ;;
 	doctor) cmd_doctor "$@" ;;
-	wt | worktree) cmd_wt "$@" ;;
-	task) cmd_task "$@" ;;
-	agents) cmd_agents "$@" ;;
-	run) cmd_run "$@" ;;
-	fix) cmd_fix "$@" ;;
-	verify) cmd_verify "$@" ;;
-	review) cmd_review "$@" ;;
-	approve) cmd_approve "$@" ;;
-	gate) cmd_gate "$@" ;;
-	pr) cmd_pr "$@" ;;
-	log) cmd_log "$@" ;;
-	ui) cmd_ui "$@" ;;
 	help) usage ;;
 	version) echo "gitctl $GITCTL_VERSION" ;;
-	# Comandos internos (no documentados): procesos en background.
-	__run-worker) _run_worker "$@" ;;
-	__adapter) _adapter_exec "$@" ;;
 	*) die "comando desconocido: $cmd (ver gitctl --help)" ;;
 	esac
 }

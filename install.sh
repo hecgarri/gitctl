@@ -45,11 +45,9 @@ mkdir -p "$prefix/bin"
 ln -sfn "$src" "$dest"
 echo "instalado: $dest -> $src"
 
-missing=()
-for c in git jq flock timeout; do command -v "$c" >/dev/null || missing+=("$c"); done
-((${#missing[@]})) && echo "faltan dependencias obligatorias: ${missing[*]} (sudo apt install ${missing[*]})" >&2
+command -v git >/dev/null || echo "falta la dependencia obligatoria: git (sudo apt install git)" >&2
 case ":$PATH:" in
 *":$prefix/bin:"*) ;;
 *) echo "aviso: $prefix/bin no está en tu PATH" >&2 ;;
 esac
-echo "siguiente paso: cd <tu-repo> && gitctl init && gitctl doctor"
+echo "siguiente paso: añade a tu ~/.bashrc: eval \"\$(gitctl shell-init bash)\""

@@ -46,29 +46,6 @@ git_default_branch() {
 	echo "${b:-main}"
 }
 
-# Identidad para commits de gitctl si el usuario no tiene ninguna configurada.
-git_identity_args() {
-	local -n _out="$1"
-	_out=()
-	git config user.name >/dev/null 2>&1 || _out+=(-c "user.name=gitctl")
-	git config user.email >/dev/null 2>&1 || _out+=(-c "user.email=gitctl@localhost")
-}
-
-# ¿Se puede fusionar $2 en $1 sin conflictos? (no toca el árbol de trabajo)
-# Devuelve 0 si limpio, 1 si conflictos, 2 si error.
-git_merge_check() {
-	local out rc=0
-	out="$(git merge-tree --write-tree --name-only --no-messages "$1" "$2" 2>&1)" || rc=$?
-	if ((rc == 1)); then
-		printf '%s\n' "$out" | tail -n +2
-		return 1
-	fi
-	((rc == 0)) || {
-		printf '%s\n' "$out"
-		return 2
-	}
-}
-
 git_version_ok() {
 	local v major minor
 	v="$(git --version | awk '{print $3}')"

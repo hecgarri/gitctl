@@ -1,3 +1,2 @@
-# jq usa $variables dentro de comillas simples a propósito.
-disable=SC2016
+# Configuración de shellcheck.
 external-sources=true

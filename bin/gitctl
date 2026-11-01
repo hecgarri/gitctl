@@ -27,6 +27,7 @@ Uso: gitctl [opciones] <comando> [argumentos]
   diff [<rama>] [--stat|--log]  Compara un worktree con su base (lo que aportaría el merge)
   merge [<rama>]             Integra el worktree en su base (merge commit) y lo limpia
   merge --continue           Termina un merge que dejaste con conflictos
+  pr [<rama>] [--title T]    Sube la rama y abre una pull request hacia su base (gh)
   rm <rama> [--force]        Elimina un worktree y su rama
   clean [--dry-run]          Elimina los worktrees ya integrados
   shell-init bash|zsh        Función de shell para el cd automático
@@ -74,6 +75,7 @@ main() {
 	ls | list) cmd_ls "$@" ;;
 	diff) cmd_diff "$@" ;;
 	merge) cmd_merge "$@" ;;
+	pr) cmd_pr "$@" ;;
 	rm | remove) cmd_rm "$@" ;;
 	clean) cmd_clean "$@" ;;
 	shell-init) cmd_shell_init "$@" ;;

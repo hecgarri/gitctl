@@ -104,6 +104,9 @@ wt_is_managed() { git config --get "branch.$1.gitctl-base" >/dev/null 2>&1; }
 # ¿Está la rama $1 completamente integrada en $2?
 branch_merged_into() { git merge-base --is-ancestor "refs/heads/$1" "refs/heads/$2" 2>/dev/null; }
 
+# ¿Integrada en su base, en local o mediante una PR ya integrada en GitHub?
+branch_integrated() { branch_merged_into "$1" "$2" || pr_merged "$1"; }
+
 # Pide a la función de shell que haga cd al terminar (ver gitctl shell-init).
 cd_to() {
 	local dir="$1"
@@ -123,8 +126,8 @@ wt_remove() {
 		git_is_clean "$path" || die "$path tiene cambios sin commitear (usa --force para descartarlos)"
 		if [[ -n "$branch" ]]; then
 			base="$(wt_base_of "$branch")"
-			branch_merged_into "$branch" "$base" ||
-				die "la rama $branch tiene commits sin integrar en $base (usa gitctl merge, o --force para descartarlos)"
+			branch_integrated "$branch" "$base" ||
+				die "la rama $branch tiene commits sin integrar en $base (usa gitctl merge o gitctl pr, o --force para descartarlos)"
 		fi
 	fi
 	if [[ "$ask" == 1 ]]; then

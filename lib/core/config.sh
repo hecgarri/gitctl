@@ -3,7 +3,7 @@
 # Formato «clave = valor»; las líneas con # son comentarios. Nunca se ejecuta
 # como código: los valores se leen como texto.
 #
-# Claves: base, copy, setup.
+# Claves: base, copy, setup, remote.
 
 declare -gA GITCTL_CFG=()
 GITCTL_CFG_LOADED=""

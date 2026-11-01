@@ -18,7 +18,8 @@ Uso: gitctl            (con terminal interactiva)
      gitctl i
 
 Abre un menú con todo lo que puede hacer gitctl: crear un worktree, entrar en
-uno, compararlo con su base, integrarlo, eliminarlo, limpiar los ya integrados…
+uno, compararlo con su base, integrarlo (merge local o pull request en GitHub),
+eliminarlo, limpiar los ya integrados…
 Tras cada acción vuelves al menú; «Nuevo» y «Entrar» lo cierran y te dejan
 dentro del worktree.
 
@@ -93,6 +94,7 @@ _menu_wt_status() {
 	fi
 	[[ "$ab" == "?" || "${ab#*/}" == 0 ]] || parts+=("${ab#*/} por detrás")
 	if git_is_clean "$path"; then parts+=("sin cambios"); else parts+=("con cambios sin commitear"); fi
+	git config --get "branch.$branch.gitctl-pr" >/dev/null 2>&1 && parts+=("con PR")
 	local IFS='|'
 	local s="${parts[*]}"
 	printf '%s' "${s//|/ · }"
@@ -283,6 +285,18 @@ _menu_merge() {
 		return 0
 	fi
 
+	# ¿Pull request en GitHub o merge local? (la PR solo si hay gh y remoto)
+	if pr_available; then
+		local how
+		how="$(pick "¿Cómo quieres integrar $(basename "$path") en $base?" \
+			$'pr\tPull request en GitHub (push + gh pr create)' \
+			"local"$'\t'"Merge local en $base (sin GitHub)")" || return 0
+		if [[ "$how" == pr ]]; then
+			_menu_exec pr "$path"
+			return
+		fi
+	fi
+
 	# 2. Un merge a mano en el principal: no lo tocamos.
 	if git -C "$main" rev-parse -q --verify MERGE_HEAD >/dev/null; then
 		err "el principal tiene un merge en curso que no es de gitctl: termínalo (git commit) o abórtalo (git merge --abort) en $main"
@@ -353,7 +367,7 @@ _menu_rm() {
 	fi
 	if [[ -n "$branch" ]]; then
 		base="$(wt_base_of "$branch")"
-		branch_merged_into "$branch" "$base" || problems+=("la rama $branch tiene commits que no están en $base")
+		branch_integrated "$branch" "$base" || problems+=("la rama $branch tiene commits que no están en $base")
 	fi
 	if ((${#problems[@]})); then
 		warn "$(basename "$path"): ${problems[*]}"
@@ -414,7 +428,7 @@ cmd_interactive() {
 			$'new\tNuevo worktree'
 			$'enter\tEntrar a un worktree'
 			$'diff\tComparar ramas (worktree vs. su base)'
-			$'merge\tIntegrar un worktree en su base'
+			$'merge\tIntegrar un worktree en su base (merge local o pull request)'
 			$'ls\tVer estado (ls)'
 			$'rm\tEliminar un worktree'
 			$'clean\tLimpiar los ya integrados'

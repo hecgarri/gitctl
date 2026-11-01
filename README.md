@@ -31,7 +31,9 @@ Opción:
   integración con el shell; la primera vez, el menú se ofrece a añadirla a tu `~/.bashrc`).
 - **Comparar ramas** abre un submenú: archivos cambiados, commits que se integrarían,
   diff completo, diff de un archivo, commits de la base que te faltan y cambios sin commitear.
-- **Integrar** comprueba antes lo que haría fallar el merge y te ofrece arreglarlo:
+- **Integrar** te pregunta cómo: **pull request en GitHub** (sube la rama y abre la
+  PR con `gh`; aparece si `gh` está instalado y el repo tiene remoto) o **merge local**.
+  Para el merge local, comprueba antes lo que lo haría fallar y te ofrece arreglarlo:
   cambios sin commitear en el worktree (te lleva a él), cambios en el principal
   (los guarda con `git stash -u` y te dice cómo recuperarlos) o el principal en otra
   rama (lo cambia a la base). Nunca descarta nada sin preguntar.
@@ -96,6 +98,7 @@ Sin terminal interactiva aborta; `--on-conflict=abort|keep` decide por ti.
 | `diff [<rama>] [--stat\|--files\|--log\|--behind\|--wip] [-- <archivo>…]` | Compara un worktree con su base desde el ancestro común: lo que aportaría el merge |
 | `merge [<rama>]` | Merge commit en la base, en el principal; luego ofrece borrar worktree y rama |
 | `merge --continue` | Termina un merge que dejaste con conflictos |
+| `pr [<rama>] [--title T]` | Sube la rama y abre una pull request hacia su base con `gh`; si ya hay una abierta, solo sube los commits nuevos |
 | `rm <rama> [--force]` | Borra worktree y rama; sin `--force` se niega si hay algo sin commitear o sin integrar |
 | `clean [--dry-run]` | Borra los worktrees creados por gitctl ya integrados y olvida los que no existen |
 | `shell-init bash\|zsh` | Imprime la función de shell |
@@ -114,6 +117,7 @@ En la raíz del repo (se lee siempre del worktree principal). Formato
 base = main              # rama en la que se crean e integran los worktrees
 copy = .env .env.local   # archivos ignorados que se copian del principal a cada worktree nuevo
 setup = npm ci           # comando que se ejecuta en cada worktree nuevo
+remote = origin          # remoto al que gitctl pr sube las ramas
 ```
 
 `setup` se ejecuta **siempre, sin preguntar**: revisa el `.gitctl.conf` de los
@@ -122,8 +126,11 @@ También puedes poner valores por defecto en `~/.config/gitctl/config`.
 
 ## Qué no hace
 
-Nada con el remoto (ni `fetch`, ni `pull`, ni `push`), nada de PRs y nada de
-agentes: los lanzas tú dentro del worktree. Nunca borra un worktree con cambios ni
+Con el remoto solo hace lo que le pides con `gitctl pr`: subir la rama del worktree
+y abrir la pull request (siempre con confirmación). Nunca hace `fetch` ni `pull`, ni
+integra nada en GitHub. Tampoco lanza agentes: los lanzas tú dentro del worktree.
+Cuando una PR creada con gitctl se integra en GitHub, `clean` reconoce la rama como
+integrada y la borra; tu base local la actualizas tú con `git pull`. Nunca borra un worktree con cambios ni
 una rama sin integrar sin `--force`, y siempre pide confirmación antes de borrar.
 
 ## Documentación

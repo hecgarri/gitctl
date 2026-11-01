@@ -10,7 +10,7 @@ lib/core/git.sh      consultas a git (raíz del principal, rama por defecto…)
 lib/core/config.sh   lector de .gitctl.conf («clave = valor», sin ejecutar)
 lib/core/wt.sh       worktrees: ubicación, listado, resolución, base, borrado y cd
 lib/core/picker.sh   selector del menú: lista numerada, o fzf si está instalado
-lib/cmd/*.sh         un archivo por comando (new, nav, diff, merge, rm, clean, shell, setup)
+lib/cmd/*.sh         un archivo por comando (new, nav, diff, merge, pr, rm, clean, shell, setup)
 lib/cmd/interactive.sh  el menú (gitctl a secas)
 tests/*.bats         tests con bats sobre repos temporales
 ```
@@ -24,6 +24,7 @@ gitctl no tiene archivos de estado propios: todo vive en la config local del rep
 | Clave | Significado |
 |---|---|
 | `branch.<rama>.gitctl-base` | Rama en la que se integra `<rama>`. Que exista marca el worktree como **gestionado** |
+| `branch.<rama>.gitctl-pr` | URL de la PR creada con `gitctl pr`. `clean` y `rm` consultan su estado con `gh`: si está integrada en GitHub, la rama cuenta como integrada |
 | `gitctl.merging` | Rama con un merge de gitctl en curso en el principal (`merge --on-conflict=keep`) |
 
 Los worktrees sin `gitctl-base` (creados con `git worktree add`) se pueden usar con

@@ -4,28 +4,42 @@ Gestor de **Git worktrees** en Bash: crea una rama con su worktree en un paso,
 salta entre ellos desde tu misma terminal, integra el trabajo en la rama
 principal con un merge commit y limpia lo que ya no hace falta.
 
-Lo normal es escribir solo `gitctl` y responder. Te pregunta según dónde estés:
+Lo normal es escribir solo `gitctl` y elegir en un menú, que vuelve a aparecer
+tras cada acción hasta que eliges `0) Salir`:
 
 ```
 ~/proyecto$ gitctl
-Worktrees existentes: ninguno
-¿Nombre del worktree? (nuevo o existente): login-oauth
-¿Desde qué rama? [main]:
-✓ worktree ../proyecto.wt/login-oauth (rama login-oauth, se integrará en main)
-~/proyecto.wt/login-oauth$          # ya estás dentro; trabajas y haces commits
 
-~/proyecto.wt/login-oauth$ gitctl
-Estás en login-oauth (rama login-oauth, 3 por delante / 0 por detrás de main)
-¿Integrarlo en main? [s/N] s
-✓ integrada login-oauth en main
-¿Eliminar el worktree … y la rama login-oauth? [s/N] s
-~/proyecto$                          # de vuelta en el principal
+── gitctl │ proyecto │ estás en: (principal) rama main
+   Worktrees:
+     login-oauth          login-oauth → main         3 por delante · sin cambios
+
+¿Qué quieres hacer?
+  1) Nuevo worktree
+  2) Entrar a un worktree
+  3) Comparar ramas (worktree vs. su base)
+  4) Integrar un worktree en su base
+  5) Ver estado (ls)
+  6) Eliminar un worktree
+  7) Limpiar los ya integrados
+  8) Diagnóstico (doctor)
+  0) Salir
+Opción:
 ```
 
-- En el principal: si escribes el nombre de un worktree que ya existe, te lleva a él;
-  si hay worktrees ya integrados, te ofrece limpiarlos antes.
-- En un worktree: si dices que no a integrar, te ofrece volver al principal; si hay
-  cambios sin commitear, te lo dice y no hace nada.
+- **Nuevo** y **Entrar** cierran el menú y te dejan dentro del worktree (con la
+  integración con el shell; la primera vez, el menú se ofrece a añadirla a tu `~/.bashrc`).
+- **Comparar ramas** abre un submenú: archivos cambiados, commits que se integrarían,
+  diff completo, diff de un archivo, commits de la base que te faltan y cambios sin commitear.
+- **Integrar** comprueba antes lo que haría fallar el merge y te ofrece arreglarlo:
+  cambios sin commitear en el worktree (te lleva a él), cambios en el principal
+  (los guarda con `git stash -u` y te dice cómo recuperarlos) o el principal en otra
+  rama (lo cambia a la base). Nunca descarta nada sin preguntar.
+- Si estás dentro de un worktree, aparece primero en las listas y hay una opción
+  **9) Volver al principal**.
+
+Si fzf está instalado, las listas usan fzf (con búsqueda); `GITCTL_PICKER=basic`
+fuerza la lista numerada.
 
 Todo lo anterior también existe como comandos sueltos (`gitctl new login-oauth`,
 `gitctl merge`…), útiles para scripts. Sin terminal interactiva, `gitctl` a secas
@@ -75,10 +89,11 @@ Sin terminal interactiva aborta; `--on-conflict=abort|keep` decide por ti.
 
 | Comando | Qué hace |
 |---|---|
-| *(nada)* o `i` | Modo interactivo: preguntas en secuencia según dónde estés |
+| *(nada)* o `i` | Menú interactivo con todas las acciones |
 | `new <rama> [--base RAMA]` | Crea (o reutiliza) la rama y su worktree, copia archivos, ejecuta `setup` y te deja dentro |
 | `cd [<rama>]` | Salta a un worktree; sin argumento, al principal |
 | `ls` | Worktrees con rama, base, commits por delante/detrás y cambios |
+| `diff [<rama>] [--stat\|--files\|--log\|--behind\|--wip] [-- <archivo>…]` | Compara un worktree con su base desde el ancestro común: lo que aportaría el merge |
 | `merge [<rama>]` | Merge commit en la base, en el principal; luego ofrece borrar worktree y rama |
 | `merge --continue` | Termina un merge que dejaste con conflictos |
 | `rm <rama> [--force]` | Borra worktree y rama; sin `--force` se niega si hay algo sin commitear o sin integrar |

@@ -18,12 +18,13 @@ usage() {
 gitctl — gestor de Git worktrees
 
 Uso: gitctl [opciones] <comando> [argumentos]
-     gitctl                     (sin argumentos: modo interactivo; sin terminal, gitctl ls)
+     gitctl                     (sin argumentos: menú interactivo; sin terminal, gitctl ls)
 
-  i                          Modo interactivo: te pregunta qué hacer según dónde estés
+  i                          Menú interactivo con todas las acciones
   new <rama> [--base RAMA]   Crea rama + worktree, lo prepara y te deja dentro
   cd [<rama>]                Salta a un worktree (sin argumento, al principal)
   ls                         Lista los worktrees y su estado
+  diff [<rama>] [--stat|--log]  Compara un worktree con su base (lo que aportaría el merge)
   merge [<rama>]             Integra el worktree en su base (merge commit) y lo limpia
   merge --continue           Termina un merge que dejaste con conflictos
   rm <rama> [--force]        Elimina un worktree y su rama
@@ -71,6 +72,7 @@ main() {
 	new) cmd_new "$@" ;;
 	cd) cmd_cd "$@" ;;
 	ls | list) cmd_ls "$@" ;;
+	diff) cmd_diff "$@" ;;
 	merge) cmd_merge "$@" ;;
 	rm | remove) cmd_rm "$@" ;;
 	clean) cmd_clean "$@" ;;

@@ -3,96 +3,65 @@
 ## Estructura
 
 ```
-bin/gitctl            dispatcher: carga lib/, enruta subcomandos a cmd_*
-lib/core/             lógica transversal sin interfaz
-  log.sh              mensajes (stderr) y marcas ✓/✗
-  util.sh             confirmaciones, ids, escritura atómica, duraciones, plantillas
-  config.sh           parseo de configuración (nunca `source`)
-  git.sh              consultas Git y comprobación de conflictos (merge-tree)
-  state.sh            estado JSON, cerrojos (flock), eventos, tareas/asignaciones
-  agents.sh           registro de adaptadores e invocación con timeout
-lib/cmd/              un fichero por grupo de comandos
-lib/adapters/         un fichero por agente (claude, codex, gemini, fake)
-lib/prompts/          plantillas de prompts (implement, fix, review)
-tests/                bats, con repositorios temporales y el agente «fake»
+bin/gitctl           punto de entrada: opciones globales y despacho
+lib/core/log.sh      mensajes (stderr) y marcas de estado
+lib/core/util.sh     confirm, need_arg, want_help, require_cmd
+lib/core/git.sh      consultas a git (raíz del principal, rama por defecto…)
+lib/core/config.sh   lector de .gitctl.conf («clave = valor», sin ejecutar)
+lib/core/wt.sh       worktrees: ubicación, listado, resolución, base, borrado y cd
+lib/cmd/*.sh         un archivo por comando (new, nav, merge, rm, clean, shell, setup)
+tests/*.bats         tests con bats sobre repos temporales
 ```
 
-La TUI (`lib/cmd/ui.sh`) solo invoca comandos de `gitctl`; no contiene lógica.
+Los datos van por stdout y los mensajes por stderr.
 
-## Ciclo de vida
+## Metadatos
 
-```
-task new ──► task assign ──► run ──► verify ──► review ──► approve ──► gate ──► pr open ──► pr merge
-                              ▲                    │
-                              └────── fix ◄────────┘  (request_changes o checks rojos)
-```
+gitctl no tiene archivos de estado propios: todo vive en la config local del repo.
 
-1. **task new** fija la especificación y el **SHA base**.
-2. **task assign** crea un worktree + rama por agente desde ese SHA.
-3. **run** lanza cada agente en un proceso independiente (`setsid`), con `timeout`,
-   en su worktree. Al terminar, gitctl hace el **commit de huella**: añade lo que el
-   agente dejó sin commitear, con autor `<agente> (vía gitctl)` y trailers
-   `Gitctl-Task`, `Gitctl-Agent`, `Gitctl-Run`, `Gitctl-Exit`. Detecta si el agente
-   cambió de rama o reescribió historial.
-4. **verify** crea un worktree temporal `--detach` en el SHA, ejecuta los `check.*`
-   y guarda exit codes, duraciones y hash de cada log.
-5. **review** crea otro worktree temporal de solo lectura y entrega al revisor
-   especificación, diff, commits y la evidencia medida. Exige un bloque JSON con el
-   veredicto; si falta, si el revisor falla o si modifica ficheros → `invalid`.
-6. **fix** convierte las huellas (hallazgos + logs de checks fallidos) en el prompt de
-   una nueva ejecución del autor. Los hallazgos se presentan como afirmaciones que
-   pueden ser erróneas.
-7. **approve** registra la intención humana para ese SHA.
-8. **gate** evalúa, sobre el SHA actual: commits, run en curso, worktree limpio,
-   evidencia vigente, revisiones ajenas, aprobación, conflictos con la base
-   (`git merge-tree --write-tree`), avance de la base y ficheros protegidos.
-9. **pr merge** solo fusiona si la puerta pasa, el HEAD del PR coincide con el SHA
-   evaluado (`--match-head-commit`) y el CI de GitHub está en verde.
+| Clave | Significado |
+|---|---|
+| `branch.<rama>.gitctl-base` | Rama en la que se integra `<rama>`. Que exista marca el worktree como **gestionado** |
+| `gitctl.merging` | Rama con un merge de gitctl en curso en el principal (`merge --on-conflict=keep`) |
 
-## Estado (`<git-common-dir>/gitctl/`)
+Los worktrees sin `gitctl-base` (creados con `git worktree add`) se pueden usar con
+`cd`, `merge` y `rm`, tomando como base la rama por defecto; `clean` no los toca nunca.
 
-Compartido por todos los worktrees, fuera del árbol versionado.
+Rama por defecto: `base` en la config → `origin/HEAD` → rama actual del principal.
 
-```
-tasks/<id>/task.json           tarea: título, base_ref, base_sha, estado, asignaciones
-tasks/<id>/spec.md             especificación entregada a los agentes
-runs/<run>/meta.json           agente, sha_start, sha_end, commits, exit, estado, notas
-runs/<run>/prompt.md           prompt exacto enviado
-runs/<run>/output.log          salida completa del agente
-runs/<run>/result.md           mensaje final del agente (afirmación)
-verifications/<sha>.json       evidencia: checks, exit, duración, sha256 del log, digest de checks
-verifications/<sha>/<check>.log
-reviews/<sha>/<revisor>.json   veredicto (claim), hallazgos, exit, nota
-reviews/<sha>/<revisor>.{md,log,prompt.md}
-approvals/<sha>.json           aprobación humana
-events.jsonl                   registro append-only de todo
-locks/                         cerrojos flock
-tmp/                           worktrees efímeros (se eliminan al terminar)
-```
+## Ubicación
 
-## Concurrencia y seguridad
+Los worktrees viven en `../<repo>.wt/<carpeta>`, donde `<carpeta>` es la rama con
+`/` cambiada por `-`. Un nombre se resuelve, en este orden, como rama, como nombre
+de carpeta y como ruta.
 
-- Escrituras de JSON con `flock` + fichero temporal + `mv` (atómicas).
-- Un cerrojo por worktree impide dos runs simultáneos del mismo agente.
-- `run stop` envía SIGTERM al grupo del worker; el worker detiene al agente y
-  marca el run como `detenido` sin commitear nada.
-- La configuración del repo se **parsea**, no se ejecuta, y se lee del worktree
-  principal.
-- Los adaptadores usan los modos restringidos de cada CLI: Codex con
-  `--sandbox workspace-write` (implementar) o `read-only` (revisar); Claude Code con
-  `--permission-mode acceptEdits` (implementar) o `dontAsk` + herramientas de solo
-  lectura (revisar).
+## Cambio de carpeta
 
-### Límites honestos
+Un programa no puede cambiar el directorio de la shell que lo lanza. `gitctl
+shell-init` imprime una función `gitctl` que:
 
-- gitctl no es un sandbox. Un agente con acceso libre a la shell podría escribir
-  fuera de su worktree o manipular `.git/gitctl/`. La protección real viene de los
-  modos restringidos de cada CLI de agente; gitctl añade aislamiento por worktree,
-  detección (cambio de rama, historial reescrito, revisor que modifica ficheros) y
-  trazabilidad.
-- La aprobación humana es un registro de intención, no una barrera criptográfica.
-- La evidencia es tan buena como los checks: si los tests no cubren algo, la puerta
-  no lo sabrá. Por eso la revisión ajena y la aprobación humana siguen siendo
-  necesarias.
-- Si la base avanza, la evidencia cubre la rama, no el resultado de la fusión; la
-  puerta lo avisa.
+1. crea un archivo temporal y lo pasa en `GITCTL_CD_FILE` (y `GITCTL_SHELL=1`);
+2. ejecuta el binario real (`command gitctl`);
+3. si el binario escribió una ruta en ese archivo, hace `cd` a ella.
+
+Se usa un archivo y no stdout para que `setup` pueda imprimir lo que quiera y las
+confirmaciones sigan siendo interactivas.
+
+## Integración (`merge`)
+
+1. Comprobaciones: worktree y principal limpios, principal en la base, ningún merge
+   en curso.
+2. `git -C <principal> merge --no-ff --no-edit <rama>`.
+3. Si sale bien: `wt_remove` (pregunta) y `cd` al principal.
+4. Con conflictos: `abort` → `merge --abort`; `keep` → se guarda `gitctl.merging`
+   y `merge --continue` hace el commit y la limpieza.
+
+## Garantías
+
+- Nunca se borra el worktree principal.
+- Sin `--force`, no se borra un worktree con cambios ni una rama con commits no
+  integrados en su base (`git merge-base --is-ancestor`).
+- Todo borrado pide confirmación (o `-y`); sin terminal y sin `-y`, se rechaza.
+- Un conflicto sin terminal interactiva aborta el merge: el principal nunca queda
+  a medias sin que lo hayas pedido.
+- `.gitctl.conf` se parsea como texto; solo `setup` se ejecuta, a propósito.

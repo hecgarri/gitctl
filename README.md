@@ -1,124 +1,103 @@
 # gitctl
 
-CLI en Bash para coordinar **desarrollo paralelo con agentes de IA** (Claude Code,
-Codex, Gemini CLI…) usando **Git worktrees**, con verificación y revisión cruzada
-ligadas a commits concretos y una puerta de integración basada en **evidencia**.
+Gestor de **Git worktrees** en Bash: crea una rama con su worktree en un paso,
+salta entre ellos desde tu misma terminal, integra el trabajo en la rama
+principal con un merge commit y limpia lo que ya no hace falta.
 
-> Un agente que dice «los tests pasan» está haciendo una afirmación.
-> gitctl ejecutando los tests sobre el commit exacto produce evidencia.
-> Solo la evidencia (más una revisión ajena y tu aprobación) abre la puerta.
-
-## Ideas clave
-
-- **Aislamiento**: cada agente que escribe código tiene su propio worktree y su
-  rama `gitctl/<tarea>/<agente>`, fuera del repositorio (`../<repo>.wt/`).
-- **Huellas, no conversación**: los agentes no hablan entre sí. Cada ejecución deja
-  huellas (commit con trailers `Gitctl-*`, prompt, log, mensaje final) y gitctl las
-  entrega como entrada al siguiente paso (revisión, corrección).
-- **Headless**: los agentes se ejecutan en modo no interactivo, en background y en
-  paralelo, con límite de tiempo.
-- **Ligado al SHA**: verificaciones, revisiones y aprobaciones se registran para un
-  commit exacto. Un commit nuevo las invalida automáticamente.
-- **Afirmación ≠ evidencia**: el veredicto de un revisor es una afirmación (`claim`);
-  el exit code de un check medido por gitctl es evidencia (`evidence`).
-- **Nada destructivo automático**: sin `push --force`, sin `reset --hard`, sin borrar
-  ramas sin fusionar; los worktrees con cambios no se eliminan sin `--force`.
+```bash
+gitctl new login-oauth     # rama + worktree en ../<repo>.wt/login-oauth, preparado, y estás dentro
+# … trabajas y haces commits (tú, o un agente que lances a mano ahí) …
+gitctl merge               # merge commit en main (en el repo principal), borra worktree y rama, vuelves al principal
+```
 
 ## Instalación
 
-Requisitos: Linux (probado en Ubuntu), `bash` ≥ 4.4, `git` ≥ 2.38, `jq`, `flock`
-y `timeout` (util-linux/coreutils). Opcionales: `gh` (PRs), `fzf` (menú), y los
-agentes que quieras usar (`claude`, `codex`, `gemini`).
+Requisitos: Linux, `bash` ≥ 4.4 y `git` ≥ 2.38. Nada más.
 
 ```bash
 git clone <este-repo> ~/src/gitctl
 cd ~/src/gitctl && make install        # enlace en ~/.local/bin/gitctl
-gitctl doctor
 ```
 
-## Uso rápido
+Añade a tu `~/.bashrc` (o `~/.zshrc` con `zsh`) la integración con el shell, para
+que `new`, `cd` y `merge` puedan cambiar la carpeta de tu terminal:
+
+```bash
+eval "$(gitctl shell-init bash)"
+```
+
+Sin ella todo funciona igual, pero gitctl te dice a qué carpeta ir en vez de llevarte.
+`gitctl doctor` comprueba que todo está en su sitio.
+
+## Flujo
 
 ```bash
 cd mi-proyecto
-gitctl init                       # crea .git/gitctl/ y un .gitctl.conf de ejemplo
-echo 'check.test = make test' >> .gitctl.conf   # define la evidencia
-git add .gitctl.conf && git commit -m "gitctl"
-
-gitctl task new "Validar emails en el registro" --spec spec.md   # → t1
-gitctl task assign t1 claude codex      # dos worktrees, dos ramas
-gitctl run t1 --wait                    # ambos en paralelo, headless
-
-gitctl verify t1 claude                 # checks en copia limpia del commit
-gitctl review t1 claude --by codex      # codex revisa a claude (solo lectura)
-gitctl fix t1 claude --wait             # si hubo request_changes o checks rojos
-gitctl verify t1 claude && gitctl review t1 claude --by codex
-
-gitctl approve t1 claude                # tu aprobación (interactiva)
-gitctl gate t1 claude                   # ✓/✗ de todo lo anterior + conflictos
-gitctl pr open t1 claude                # push + PR con el informe de evidencia
-gitctl pr merge t1 claude               # solo si el HEAD del PR = commit evaluado y CI en verde
+gitctl new feat/login          # crea ../mi-proyecto.wt/feat-login (rama feat/login desde main)
+git commit -am "…"             # trabajas dentro del worktree
+gitctl ls                      # estado de todos los worktrees
+gitctl cd                      # vuelves al principal;  gitctl cd feat/login  para volver
+gitctl merge feat/login        # integra (desde el worktree basta con «gitctl merge»)
 ```
 
-Sin argumentos, `gitctl` abre un menú interactivo (con `fzf` si está instalado).
+`merge` necesita que el worktree y el principal no tengan cambios sin commitear y
+que el principal esté en la rama base. Si hay **conflictos**, te pregunta:
+
+- **abortar**: el principal queda intacto; integra la base en tu worktree
+  (`git merge main`), resuelve allí y repite `gitctl merge`;
+- **dejar el merge en curso** en el principal: te lleva allí, resuelves, `git add`
+  y `gitctl merge --continue`.
+
+Sin terminal interactiva aborta; `--on-conflict=abort|keep` decide por ti.
 
 ## Comandos
 
 | Comando | Qué hace |
 |---|---|
-| `init`, `doctor` | Preparar el repo; comprobar dependencias y agentes |
-| `wt ls\|new\|show\|path\|open\|rm` | Gestión de worktrees |
-| `task new\|ls\|show\|assign\|spec\|close` | Tareas y asignación de agentes |
-| `agents` | Adaptadores disponibles |
-| `run <tarea> [agente…]` | Lanzar agentes en background (`--wait`, `--timeout`) |
-| `run status\|wait\|logs\|show\|stop` | Seguimiento de ejecuciones |
-| `fix <tarea> <agente>` | Relanzar al autor con hallazgos y checks fallidos |
-| `verify <tarea> <agente>` | Evidencia: checks sobre el commit exacto |
-| `review <tarea> <autor> --by <revisor>` | Revisión cruzada de solo lectura |
-| `approve <tarea> <agente>` | Aprobación humana ligada al commit |
-| `gate <tarea> <agente>` | ¿Puede integrarse? (`--json` para scripts) |
-| `pr open\|status\|merge` | Pull Requests vía `gh` |
-| `log [tarea]` | Historial de eventos |
+| `new <rama> [--base RAMA]` | Crea (o reutiliza) la rama y su worktree, copia archivos, ejecuta `setup` y te deja dentro |
+| `cd [<rama>]` | Salta a un worktree; sin argumento, al principal |
+| `ls` | Worktrees con rama, base, commits por delante/detrás y cambios (también `gitctl` a secas) |
+| `merge [<rama>]` | Merge commit en la base, en el principal; luego ofrece borrar worktree y rama |
+| `merge --continue` | Termina un merge que dejaste con conflictos |
+| `rm <rama> [--force]` | Borra worktree y rama; sin `--force` se niega si hay algo sin commitear o sin integrar |
+| `clean [--dry-run]` | Borra los worktrees creados por gitctl ya integrados y olvida los que no existen |
+| `shell-init bash\|zsh` | Imprime la función de shell |
+| `init`, `doctor` | `.gitctl.conf` de ejemplo; comprobaciones |
 
-Cada comando acepta `--help`.
+Las ramas pueden llevar `/`: `feat/login` vive en la carpeta `feat-login`, y
+`cd`/`merge`/`rm` aceptan cualquiera de los dos nombres. `-y` responde «sí» a
+las confirmaciones. Cada comando acepta `--help`.
 
 ## Configuración (`.gitctl.conf`)
 
-Formato `clave = valor`, **nunca se ejecuta** como código. Se lee siempre del
-worktree principal, así que un agente no puede relajar los checks desde su rama.
+En la raíz del repo (se lee siempre del worktree principal). Formato
+`clave = valor`; el archivo **nunca se ejecuta** como código.
 
 ```ini
-base = main
-check.test = make test             # los checks son la evidencia, en orden
-check.lint = shellcheck src/*.sh
-agent.timeout = 30m
-review.required = 1                # revisiones aprobatorias de OTROS agentes
-review.require_different_adapter = false
-gate.require_approval = true
-gate.protected = .gitctl.conf .github/workflows/*   # aviso si se modifican
-agent.claude.implement.args = --allowedTools Bash(make test:*)
-agent.claude-opus.args = --model opus   # agente «claude-opus» con el adaptador claude
+base = main              # rama en la que se crean e integran los worktrees
+copy = .env .env.local   # archivos ignorados que se copian del principal a cada worktree nuevo
+setup = npm ci           # comando que se ejecuta en cada worktree nuevo
 ```
 
-Los checks se ejecutan en una copia limpia: si necesitan dependencias, inclúyelas
-(`check.test = npm ci && npm test`).
+`setup` se ejecuta **siempre, sin preguntar**: revisa el `.gitctl.conf` de los
+repos que no sean tuyos. Si falla, el worktree se conserva y se avisa.
+También puedes poner valores por defecto en `~/.config/gitctl/config`.
 
-## Varios agentes del mismo tipo
+## Qué no hace
 
-El nombre del agente es libre; su adaptador es el prefijo hasta el primer `-`:
-`claude-opus`, `claude-sonnet` y `claude` usan el adaptador `claude` con distinta
-configuración. Revisar con el mismo adaptador está permitido pero se avisa de que la
-independencia es limitada (o se prohíbe con `review.require_different_adapter`).
+Nada con el remoto (ni `fetch`, ni `pull`, ni `push`), nada de PRs y nada de
+agentes: los lanzas tú dentro del worktree. Nunca borra un worktree con cambios ni
+una rama sin integrar sin `--force`, y siempre pide confirmación antes de borrar.
 
 ## Documentación
 
-- [Arquitectura y modelo de estado](docs/arquitectura.md)
-- [Escribir un adaptador de agente](docs/adaptadores.md)
+- [Arquitectura](docs/arquitectura.md)
 - [Hoja de ruta](docs/hoja-de-ruta.md)
 
 ## Desarrollo
 
 ```bash
 make deps    # descarga bats-core si no está instalado
-make test    # tests (bats), con un agente simulado «fake»
+make test    # tests (bats)
 make lint    # shellcheck + shfmt
 ```

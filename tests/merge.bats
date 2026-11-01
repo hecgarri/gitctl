@@ -158,3 +158,97 @@ conflict() {
 	assert_output_contains "no se ha integrado"
 	refute git config --get gitctl.merging
 }
+
+# --push: remoto bare con main ya subido.
+with_remote() {
+	git init -q --bare "$TEST_TMP/remote.git"
+	git remote add origin "$TEST_TMP/remote.git"
+	git push -q origin main
+}
+
+@test "merge --push integra y sube la base al remoto" {
+	with_remote
+	commit_in "$WT" f.txt f
+	run gitctl -y merge x --push
+	assert_success
+	assert_output_contains "main subida a origin"
+	[[ "$(git ls-remote --heads origin main | cut -f1)" == "$(git rev-parse main)" ]]
+	git -C "$TEST_TMP/remote.git" cat-file -e main:f.txt
+}
+
+@test "merge sin --push avisa de que la base quedó por delante del remoto" {
+	with_remote
+	commit_in "$WT" f.txt f
+	run gitctl -y merge x
+	assert_success
+	assert_output_contains "por delante de origin/main"
+	assert_output_contains "gitctl merge --push"
+	[[ "$(git ls-remote --heads origin main | cut -f1)" != "$(git rev-parse main)" ]]
+}
+
+@test "merge sin --push ni remoto no menciona el push" {
+	commit_in "$WT" f.txt f
+	run gitctl -y merge x
+	assert_success
+	[[ "$output" != *"push"* ]]
+}
+
+@test "merge --push sin -y ni TTY integra pero no sube" {
+	with_remote
+	commit_in "$WT" f.txt f
+	run gitctl merge x --push </dev/null
+	assert_failure
+	assert_output_contains "no se ha subido main"
+	[[ -f "$REPO/f.txt" ]]
+	[[ "$(git ls-remote --heads origin main | cut -f1)" != "$(git rev-parse main)" ]]
+}
+
+@test "merge --push pregunta y respeta el no" {
+	with_remote
+	commit_in "$WT" f.txt f
+	run bash -c 'printf "n\nn\n" | GITCTL_ASSUME_TTY=1 gitctl merge x --push'
+	assert_failure
+	assert_output_contains "Se subirá main a origin"
+	assert_output_contains "cambio f.txt"
+	[[ "$(git ls-remote --heads origin main | cut -f1)" != "$(git rev-parse main)" ]]
+}
+
+@test "merge --push sin remoto integra y falla al subir" {
+	commit_in "$WT" f.txt f
+	run gitctl -y merge x --push
+	assert_failure
+	assert_output_contains "no tiene el remoto"
+	[[ -f "$REPO/f.txt" ]]
+	[[ ! -d "$WT" ]]
+}
+
+@test "merge --push con la rama ya integrada solo sube lo pendiente" {
+	with_remote
+	commit_in "$WT" f.txt f
+	gitctl -y merge x >/dev/null 2>&1
+	gitctl new x >/dev/null 2>&1
+	run gitctl -y merge x --push
+	assert_success
+	assert_output_contains "nada nuevo"
+	assert_output_contains "main subida a origin"
+	[[ "$(git ls-remote --heads origin main | cut -f1)" == "$(git rev-parse main)" ]]
+}
+
+@test "merge --push con la base al día no sube nada" {
+	with_remote
+	run gitctl -y merge x --push
+	assert_success
+	assert_output_contains "al día"
+}
+
+@test "merge --continue --push sube tras resolver el conflicto" {
+	with_remote
+	conflict
+	gitctl -y merge x --on-conflict=keep --push >/dev/null 2>&1 || true
+	echo resuelto >README.md
+	git add README.md
+	run gitctl -y merge --continue --push
+	assert_success
+	assert_output_contains "main subida a origin"
+	[[ "$(git ls-remote --heads origin main | cut -f1)" == "$(git rev-parse main)" ]]
+}

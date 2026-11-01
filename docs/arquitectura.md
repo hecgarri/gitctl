@@ -70,9 +70,13 @@ Antes de `merge`, el menú repite sus comprobaciones y ofrece arreglar cada una
 1. Comprobaciones: worktree y principal limpios, principal en la base, ningún merge
    en curso.
 2. `git -C <principal> merge --no-ff --no-edit <rama>`.
-3. Si sale bien: `wt_remove` (pregunta) y `cd` al principal.
+3. Si sale bien: `_merge_publish` y después `wt_remove` (pregunta) y `cd` al
+   principal. `_merge_publish` compara la base con `refs/remotes/<remoto>/<base>`:
+   con `--push` muestra los commits, confirma y hace `git push -u <remoto> <base>`;
+   sin `--push` solo avisa si quedó por delante. Un push rechazado o fallido no
+   deshace el merge, pero el comando termina con 1.
 4. Con conflictos: `abort` → `merge --abort`; `keep` → se guarda `gitctl.merging`
-   y `merge --continue` hace el commit y la limpieza.
+   y `merge --continue [--push]` hace el commit, el push si se pidió y la limpieza.
 
 ## Garantías
 

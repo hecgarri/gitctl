@@ -24,30 +24,36 @@ while (($#)); do
 done
 
 src="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)/bin/gitctl"
-dest="$prefix/bin/gitctl"
+# gestionar_worktrees: el mismo nombre que el script de Windows.
+nombres=(gitctl gestionar_worktrees)
 
 if [[ -n "$uninstall" ]]; then
-	if [[ -L "$dest" && "$(readlink -f "$dest")" == "$src" ]]; then
-		rm -f "$dest"
-		echo "eliminado $dest"
-	else
-		echo "$dest no es un enlace a esta copia de gitctl; no se toca" >&2
-		exit 1
-	fi
+	for n in "${nombres[@]}"; do
+		dest="$prefix/bin/$n"
+		if [[ -L "$dest" && "$(readlink -f "$dest")" == "$src" ]]; then
+			rm -f "$dest"
+			echo "eliminado $dest"
+		elif [[ -e "$dest" || -L "$dest" ]]; then
+			echo "$dest no es un enlace a esta copia de gitctl; no se toca" >&2
+		fi
+	done
 	exit 0
 fi
 
-if [[ -e "$dest" && ! -L "$dest" ]]; then
-	echo "ya existe $dest y no es un enlace; no se sobrescribe" >&2
-	exit 1
-fi
 mkdir -p "$prefix/bin"
-ln -sfn "$src" "$dest"
-echo "instalado: $dest -> $src"
+for n in "${nombres[@]}"; do
+	dest="$prefix/bin/$n"
+	if [[ -e "$dest" && ! -L "$dest" ]]; then
+		echo "ya existe $dest y no es un enlace; no se sobrescribe" >&2
+		exit 1
+	fi
+	ln -sfn "$src" "$dest"
+	echo "instalado: $dest -> $src"
+done
 
 command -v git >/dev/null || echo "falta la dependencia obligatoria: git (sudo apt install git)" >&2
+command -v jq >/dev/null || echo "aviso: falta jq, necesario solo para Evaluar (sudo apt install jq)" >&2
 case ":$PATH:" in
 *":$prefix/bin:"*) ;;
 *) echo "aviso: $prefix/bin no está en tu PATH" >&2 ;;
 esac
-echo "siguiente paso: añade a tu ~/.bashrc: eval \"\$(gitctl shell-init bash)\""

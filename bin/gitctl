@@ -1,90 +1,88 @@
 #!/usr/bin/env bash
-# gitctl — gestor de Git worktrees: crear, saltar, integrar y limpiar.
+# gitctl — worktrees de Git por agente y tarea (réplica en bash de
+# gestionar_worktrees.ps1, con los mismos parámetros y comportamiento).
 set -euo pipefail
 
-GITCTL_VERSION="0.2.0"
+GITCTL_VERSION="1.0.0"
 _self="$(readlink -f "${BASH_SOURCE[0]}")"
 GITCTL_HOME="$(cd "$(dirname "$_self")/.." && pwd)"
 GITCTL_LIB="$GITCTL_HOME/lib"
 
-for _f in "$GITCTL_LIB"/core/*.sh "$GITCTL_LIB"/cmd/*.sh; do
+for _f in "$GITCTL_LIB"/core/*.sh "$GITCTL_LIB"/acciones/*.sh "$GITCTL_LIB"/acciones/evaluar/*.sh; do
 	# shellcheck source=/dev/null
 	source "$_f"
 done
 unset _f _self
 
+export GIT_PAGER=cat PAGER=cat
+
 usage() {
 	cat <<'H'
-gitctl — gestor de Git worktrees
+gitctl — worktrees de Git por agente y tarea
 
-Uso: gitctl [opciones] <comando> [argumentos]
-     gitctl                     (sin argumentos: menú interactivo; sin terminal, gitctl ls)
+Uso: gitctl                                   menú interactivo
+     gitctl -Accion <acción> [parámetros]     ejecuta una acción y termina
 
-  i                          Menú interactivo con todas las acciones
-  new <rama> [--base RAMA]   Crea rama + worktree, lo prepara y te deja dentro
-  cd [<rama>]                Salta a un worktree (sin argumento, al principal)
-  ls                         Lista los worktrees y su estado
-  diff [<rama>] [--stat|--log]  Compara un worktree con su base (lo que aportaría el merge)
-  merge [<rama>] [--push]    Integra el worktree en su base (merge commit), lo limpia
-                             y, con --push, sube la base al remoto
-  merge --continue           Termina un merge que dejaste con conflictos
-  pr [<rama>] [--title T]    Sube la rama y abre una pull request hacia su base (gh)
-  rm <rama> [--force]        Elimina un worktree y su rama
-  clean [--dry-run]          Elimina los worktrees ya integrados
-  shell-init bash|zsh        Función de shell para el cd automático
-  init                       Crea un .gitctl.conf de ejemplo
-  doctor                     Comprueba git, repositorio, config y shell
+Acciones: Crear, Estado, Comparar, Evaluar, Integrar, Eliminar
 
-Opciones globales
-  -q, --quiet     Menos mensajes          -v, --verbose   Más mensajes
-  -y, --yes       Responde «sí» a las confirmaciones
-  -h, --help      Ayuda                   --version       Versión
+Parámetros (sin distinguir mayúsculas; también --nombre):
+  -Agente, -Tarea            identidad del worktree (rama <agente>/<tarea>)
+  -Base                      rama local base (no SHA, etiquetas ni ramas remotas)
+  -Repositorio               repo o subcarpeta del principal (por defecto, la actual)
+  -RaizWorktrees             carpeta de worktrees (por defecto <repo>-agents, hermana)
+  -Metodo Merge|CherryPick   cómo integrar
+  -Commits "a,b"             commits para el cherry-pick
+  -Ramas "a,b"               las dos ramas que comparar o evaluar
+  -MostrarDiffCompleto       diff completo al comparar (en lugar de --stat)
+  -CerrarSinIntegrar         retirar aunque la rama no esté integrada (la conserva)
+  -Forzar                    descartar cambios sin confirmar al retirar
+  -RescatarCambios <dir>     copiar antes los archivos pendientes a <dir>
+  -ConfirmarIntegracion, -ConfirmarEliminacion, -ConfirmarEnvioLlm
+                             confirmaciones obligatorias con -SinInteraccion
+  -SinInteraccion            no preguntar nunca (requiere -Accion)
+  -CriteriosRevision <arch>  criterios para Evaluar (relativo a la raíz del repo)
+  -ProveedorLlm              Codex, Claude, Gemini, Ambos (Codex+Claude) o Todos
+  -ModeloCodex, -ModeloClaude, -ModeloGemini     modelo (por defecto, el de la CLI)
+  -ComandoCodex, -ComandoClaude, -ComandoGemini  comando o ruta de cada CLI
+  -MaxCaracteresLlm <n>      límite del paquete (10000–1000000; 200000)
+  -TiempoEsperaLlmSegundos <n>  límite por consulta (1–3600; 600)
+  -h, --help                 esta ayuda          --version   versión
 
-Ejecuta «gitctl <comando> --help» para la ayuda de cada comando.
+Ejemplos:
+  gitctl -Accion Crear -Agente codex -Tarea corregir-api -SinInteraccion
+  gitctl -Accion Estado -SinInteraccion
+  gitctl -Accion Comparar -Ramas "claude/corregir-api,codex/corregir-api" -MostrarDiffCompleto -SinInteraccion
+  gitctl -Accion Integrar -Agente codex -Tarea corregir-api -Metodo Merge -ConfirmarIntegracion -SinInteraccion
+  gitctl -Accion Eliminar -Agente codex -Tarea corregir-api -ConfirmarEliminacion -SinInteraccion
 H
 }
 
 main() {
-	while (($#)); do
-		case "$1" in
-		-q | --quiet) export GITCTL_QUIET=1 ;;
-		-v | --verbose) export GITCTL_VERBOSE=1 ;;
-		-y | --yes) export GITCTL_YES=1 ;;
-		-h | --help)
-			usage
-			return 0
-			;;
-		--version)
-			echo "gitctl $GITCTL_VERSION"
-			return 0
-			;;
-		-*) die "opción desconocida: $1 (ver gitctl --help)" ;;
-		*) break ;;
-		esac
-		shift
-	done
-
-	if (($# == 0)); then
-		if is_interactive; then set -- i; else set -- ls; fi
+	# Compatibilidad: versiones anteriores pedían «eval "$(gitctl shell-init bash)"»
+	# en ~/.bashrc. Ya no hace falta; no se imprime nada para que el eval no falle.
+	if [[ "${1:-}" == shell-init ]]; then
+		warn "gitctl shell-init ya no existe: quita la línea «eval \"\$(gitctl shell-init …)\"» de tu ~/.bashrc"
+		return 0
 	fi
-	local cmd="$1"
-	shift
-	case "$cmd" in
-	i | interactive) cmd_interactive "$@" ;;
-	new) cmd_new "$@" ;;
-	cd) cmd_cd "$@" ;;
-	ls | list) cmd_ls "$@" ;;
-	diff) cmd_diff "$@" ;;
-	merge) cmd_merge "$@" ;;
-	pr) cmd_pr "$@" ;;
-	rm | remove) cmd_rm "$@" ;;
-	clean) cmd_clean "$@" ;;
-	shell-init) cmd_shell_init "$@" ;;
-	init) cmd_init "$@" ;;
-	doctor) cmd_doctor "$@" ;;
-	help) usage ;;
-	version) echo "gitctl $GITCTL_VERSION" ;;
-	*) die "comando desconocido: $cmd (ver gitctl --help)" ;;
+	parse_params "$@"
+	if [[ -n "$P_AYUDA" ]]; then
+		usage
+		return 0
+	fi
+	if [[ -n "$P_VERSION" ]]; then
+		echo "gitctl $GITCTL_VERSION"
+		return 0
+	fi
+	command -v git >/dev/null 2>&1 || die "falta git"
+	resolver_contexto
+	case "$P_ACCION" in
+	"") accion_menu ;;
+	Crear) accion_crear ;;
+	Estado) accion_estado ;;
+	Comparar) accion_comparar ;;
+	Evaluar) accion_evaluar ;;
+	Integrar) accion_integrar ;;
+	Eliminar) accion_eliminar ;;
 	esac
 }
 

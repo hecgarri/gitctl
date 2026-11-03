@@ -2,7 +2,7 @@ PREFIX ?= $(HOME)/.local
 BATS ?= $(shell command -v bats 2>/dev/null || echo tests/vendor/bats-core/bin/bats)
 SHELLCHECK ?= shellcheck
 SHFMT ?= shfmt
-SOURCES := bin/gitctl $(wildcard lib/*/*.sh) install.sh
+SOURCES := bin/gitctl $(wildcard lib/*/*.sh lib/*/*/*.sh) install.sh
 
 .PHONY: test lint fmt install uninstall deps check
 

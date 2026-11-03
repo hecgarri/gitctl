@@ -6,36 +6,49 @@ GITCTL_ROOT="$(cd "$BATS_TEST_DIRNAME/.." && pwd)"
 setup_repo() {
 	export TEST_TMP="$BATS_TEST_TMPDIR"
 	export HOME="$TEST_TMP/home"
-	export XDG_CONFIG_HOME="$HOME/.config"
 	mkdir -p "$HOME"
 	export GIT_AUTHOR_NAME="Tester" GIT_AUTHOR_EMAIL="tester@example.com"
 	export GIT_COMMITTER_NAME="Tester" GIT_COMMITTER_EMAIL="tester@example.com"
 	export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$HOME/.gitconfig"
 	export NO_COLOR=1
 	export PATH="$GITCTL_ROOT/bin:$PATH"
-	unset GITCTL_YES GITCTL_CD_FILE GITCTL_SHELL
 	REPO="$TEST_TMP/repo"
+	RAIZ="$TEST_TMP/repo-agents"
 	mkdir -p "$REPO"
 	cd "$REPO" || return 1
 	git init -q -b main
 	echo "hola" >README.md
-	printf '.env\nconfig/local.yml\n' >.gitignore
-	: >.gitctl.conf
-	git add README.md .gitignore .gitctl.conf
+	mkdir -p src
+	echo "uno" >src/app.txt
+	git add README.md src
 	git commit -q -m "inicial"
-	export CD_FILE="$TEST_TMP/cd-file"
-	: >"$CD_FILE"
 }
 
-set_cfg() { echo "$1 = $2" >>"$REPO/.gitctl.conf"; }
-wt_path() { echo "$TEST_TMP/repo.wt/$1"; }
+# gitctl sin interacción: g <acción> [parámetros…]
+g() { gitctl -Accion "$1" "${@:2}" -SinInteraccion; }
 
-# Commit de un archivo en un directorio: commit_in <dir> <archivo> <contenido>
-commit_in() {
+# Crea el worktree de <agente>/<tarea>.
+crear() { g Crear -Agente "$1" -Tarea "$2" >/dev/null 2>&1; }
+
+wt() { echo "$RAIZ/$1/$2"; }
+
+# Commit de un archivo en un directorio: commit_en <dir> <archivo> <contenido> [mensaje]
+commit_en() {
+	mkdir -p "$(dirname "$1/$2")"
 	echo "$3" >"$1/$2"
 	git -C "$1" add "$2"
-	git -C "$1" commit -q -m "cambio $2"
+	git -C "$1" commit -q -m "${4:-cambio $2}"
 }
+
+# Ejecuta gitctl con las respuestas dadas por stdin: responder "<líneas>" [parámetros…]
+responder() {
+	local input="$1"
+	shift
+	run bash -c 'printf "%b" "$1" | gitctl "${@:2}"' _ "$input" "$@"
+}
+
+# Huella de todas las referencias (para comprobar que no cambian).
+refs() { git -C "$REPO" for-each-ref --format='%(refname) %(objectname)'; }
 
 assert_success() {
 	if [[ "$status" -ne 0 ]]; then
@@ -54,6 +67,13 @@ assert_failure() {
 assert_output_contains() {
 	if [[ "$output" != *"$1"* ]]; then
 		echo "la salida no contiene «$1»:"
+		echo "$output"
+		return 1
+	fi
+}
+refute_output_contains() {
+	if [[ "$output" == *"$1"* ]]; then
+		echo "la salida no debía contener «$1»:"
 		echo "$output"
 		return 1
 	fi

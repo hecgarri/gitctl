@@ -1,2 +1,5 @@
 # Configuración de shellcheck.
 external-sources=true
+# Las variables globales (P_*, A_*, PEND_*, RESP, ELEGIDO…) se asignan en un
+# archivo de lib/ y se leen en otro; shellcheck analiza cada archivo por separado.
+disable=SC2034,SC2153
